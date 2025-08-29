@@ -13,6 +13,7 @@ dnspython
 aiohttp
 python-dotenv
 flask
+uvicorn
 # --- For-Web-Response ------- #
 pytz
 requests
