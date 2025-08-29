@@ -13,6 +13,9 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+# Get port from environment (for Render.com deployment)
+    PORT = int(os.environ.get("PORT", 8000))
+    ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 
 logger = logging.getLogger(__name__)
 
@@ -29,4 +32,14 @@ async def main():
         raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+    
+    logger.info(f"Starting Flask app on port {port}")
+    logger.info(f"Bot @{bot.bot_username} is ready to receive messages")
+    
+    try:
+        app.run(host='0.0.0.0', port=PORT, debug=debug)
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        bot.stop_polling()
