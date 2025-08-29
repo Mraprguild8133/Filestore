@@ -8,4 +8,5 @@ dependencies = [
     "aiohttp>=3.12.15",
     "pyrogram>=2.0.106",
      "flask>=3.1.2",
+     "TgCrypto>=1.2.5",
 ]
