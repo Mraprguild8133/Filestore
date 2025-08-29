@@ -71,9 +71,6 @@ class Config:
         "gg.gg": {"api_url": "http://gg.gg/create", "requires_key": False},
         "tiny.cc": {"api_url": "https://tiny.cc/", "requires_key": True}
     }
-
-    # Required
-  export BOT_TOKEN="your_bot_token_here"
  
   # For webhook mode
   export USE_WEBHOOK="true"
