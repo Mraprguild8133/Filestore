@@ -62,10 +62,10 @@ async def start_command(client: Client, message: Message):
     
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📢 Updates", url="https://t.me/codeflix_bots"),
-            InlineKeyboardButton("💬 Support", url="https://t.me/codeflix_bots")
+            InlineKeyboardButton("📢 Updates", url="https://t.me/mraprguildbot"),
+            InlineKeyboardButton("💬 Support", url="https://t.me/mraprguildbot"),
         ],
-        [InlineKeyboardButton("👨‍💻 Developer", url="https://t.me/codeflix_bots")]
+        [InlineKeyboardButton("👨‍💻 Developer", url="https://t.me/mraprguildbot")]
     ])
     
     # Send photo with start message
