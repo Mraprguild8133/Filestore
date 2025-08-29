@@ -1,188 +1,154 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Main entry point for the Telegram FileStore Bot
+Main entry point for the Telegram FileStore Bot with Webhook support
 """
 
-import os
 import asyncio
 import logging
-import threading
 import signal
-import sys
-import time
-from flask import Flask, request, jsonify
+import os
+import ssl
+from aiohttp import web
+from bot import Bot
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
 logger = logging.getLogger(__name__)
 
-# Initialize Flask app
-app = Flask(__name__)
+class SignalHandler:
+    """Handle shutdown signals gracefully"""
+    def __init__(self):
+        self.shutdown_requested = False
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+    
+    def _signal_handler(self, signum, frame):
+        logger.info(f"Received signal {signum}, shutting down...")
+        self.shutdown_requested = True
 
-# Global bot instance
-bot_instance = None
-bot_loop = None
-bot_thread = None
-bot_initialized = False
-
-async def setup_bot():
-    """Set up the bot instance"""
-    global bot_instance, bot_initialized
-    try:
-        logger.info("Initializing FileStore Bot...")
+class WebhookServer:
+    """HTTP server for webhook handling"""
+    def __init__(self, bot, host='0.0.0.0', port=8000):
+        self.bot = bot
+        self.host = host
+        self.port = port
+        self.app = web.Application()
+        self.runner = None
+        self.site = None
         
-        # Import here to avoid circular imports
-        from bot import Bot
-        bot_instance = Bot()
-        await bot_instance.initialize()
+        # Setup routes
+        self.app.router.add_post('/webhook', self.handle_webhook)
+        self.app.router.add_get('/health', self.handle_health)
+        self.app.router.add_get('/', self.handle_root)
+    
+    async def handle_webhook(self, request):
+        """Handle Telegram webhook updates"""
+        try:
+            data = await request.json()
+            await self.bot.process_update(data)
+            return web.Response(text='OK')
+        except Exception as e:
+            logger.error(f"Error processing webhook: {e}")
+            return web.Response(text='Error', status=500)
+    
+    async def handle_health(self, request):
+        """Health check endpoint"""
+        return web.json_response({"status": "healthy", "bot_running": self.bot.is_running})
+    
+    async def handle_root(self, request):
+        """Root endpoint"""
+        return web.Response(text="Telegram FileStore Bot Webhook Server")
+    
+    async def start(self):
+        """Start the web server"""
+        self.runner = web.AppRunner(self.app)
+        await self.runner.setup()
         
-        bot_initialized = True
-        logger.info("Bot initialized successfully!")
-        return bot_instance
-    except Exception as e:
-        logger.error(f"Error initializing bot: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        bot_initialized = False
-        raise
+        # Configure SSL if certificates are provided
+        ssl_context = None
+        ssl_cert = os.environ.get('SSL_CERTIFICATE')
+        ssl_key = os.environ.get('SSL_PRIVATE_KEY')
+        
+        if ssl_cert and ssl_key:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain(ssl_cert, ssl_key)
+            logger.info("SSL context configured with provided certificates")
+        
+        self.site = web.TCPSite(self.runner, self.host, self.port, ssl_context=ssl_context)
+        await self.site.start()
+        logger.info(f"Webhook server started on {self.host}:{self.port}")
+    
+    async def stop(self):
+        """Stop the web server"""
+        if self.runner:
+            await self.runner.cleanup()
+        logger.info("Webhook server stopped")
 
-def run_bot():
-    """Run the bot in a separate event loop"""
-    global bot_instance, bot_loop, bot_initialized
-    bot_loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(bot_loop)
+async def main():
+    """Main function to run the bot"""
+    bot = None
+    webhook_server = None
+    signal_handler = SignalHandler()
     
     try:
-        # Try to initialize the bot
-        bot_instance = bot_loop.run_until_complete(setup_bot())
+        logger.info("Starting FileStore Bot...")
         
-        if bot_initialized:
-            # Start the bot's polling
-            logger.info("Starting bot polling...")
-            bot_loop.run_until_complete(bot_instance.start_polling())
-        else:
-            logger.error("Bot not initialized, cannot start polling")
+        # Initialize bot
+        bot = Bot()
+        await bot.initialize()
+        
+        # Check if webhook mode is enabled
+        use_webhook = os.environ.get('USE_WEBHOOK', 'false').lower() == 'true'
+        webhook_url = os.environ.get('WEBHOOK_URL')
+        
+        if use_webhook and webhook_url:
+            logger.info("Starting in WEBHOOK mode")
             
-    except ImportError as e:
-        logger.error(f"Import error: {e}. Please check your bot.py file.")
+            # Start webhook server
+            webhook_server = WebhookServer(bot, port=8000)
+            await webhook_server.start()
+            
+            # Set webhook
+            await bot.set_webhook(webhook_url)
+            logger.info(f"Webhook set to: {webhook_url}")
+            
+        else:
+            logger.info("Starting in POLLING mode")
+            await bot.start()
+        
+        logger.info("Bot started successfully!")
+        
+        # Keep the bot running until shutdown signal
+        while not signal_handler.shutdown_requested:
+            await asyncio.sleep(1)
+            
+    except KeyboardInterrupt:
+        logger.info("Received KeyboardInterrupt, shutting down...")
     except Exception as e:
-        logger.error(f"Unexpected error in bot thread: {e}")
+        logger.error(f"Error in main: {e}")
         import traceback
         logger.error(traceback.format_exc())
-    except KeyboardInterrupt:
-        logger.info("Bot shutting down...")
     finally:
-        if bot_instance and bot_initialized:
+        # Cleanup
+        if bot:
+            logger.info("Shutting down bot...")
             try:
-                bot_loop.run_until_complete(bot_instance.shutdown())
+                if use_webhook and webhook_url:
+                    await bot.remove_webhook()
+                await bot.shutdown()
             except Exception as e:
                 logger.error(f"Error during shutdown: {e}")
-        bot_loop.close()
-
-def shutdown_handler(signum, frame):
-    """Handle shutdown signals gracefully"""
-    logger.info("Received shutdown signal")
-    if bot_instance and bot_loop and bot_initialized:
-        try:
-            # Schedule the shutdown coroutine in the bot's event loop
-            future = asyncio.run_coroutine_threadsafe(bot_instance.shutdown(), bot_loop)
-            future.result(timeout=10)  # Wait for shutdown to complete with timeout
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}")
-    sys.exit(0)
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    """Global exception handler for Flask"""
-    logger.error(f"Unhandled exception: {e}")
-    import traceback
-    logger.error(traceback.format_exc())
-    return jsonify({"error": "Internal server error"}), 500
-
-@app.route('/')
-def index():
-    """Health check endpoint"""
-    try:
-        if bot_initialized and hasattr(bot_instance, 'is_running') and bot_instance.is_running:
-            return "Telegram FileStore Bot is running!"
-        elif bot_initialized:
-            return "Telegram FileStore Bot is initialized but not running"
-        else:
-            return "Telegram FileStore Bot is starting up...", 503
-    except Exception as e:
-        logger.error(f"Error in index route: {e}")
-        return "Error checking bot status", 500
-
-@app.route('/health')
-def health():
-    """Simple health check endpoint"""
-    return jsonify({"status": "ok", "bot_initialized": bot_initialized})
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    """Webhook endpoint for Telegram updates"""
-    try:
-        if not bot_initialized or not bot_loop:
-            return "Bot not initialized", 503
         
-        # Process the update
-        update = request.get_json()
-        logger.info(f"Received webhook update: {update}")
+        if webhook_server:
+            logger.info("Stopping webhook server...")
+            await webhook_server.stop()
         
-        # Use the bot's event loop to process the update asynchronously
-        asyncio.run_coroutine_threadsafe(
-            bot_instance.process_update(update), 
-            bot_loop
-        )
-        return "OK"
-    except Exception as e:
-        logger.error(f"Error processing webhook: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return "Error processing update", 500
-
-def main():
-    """Main function to run the bot"""
-    global bot_thread
-    
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, shutdown_handler)
-    signal.signal(signal.SIGTERM, shutdown_handler)
-    
-    # Get port from environment (for Render.com deployment)
-    PORT = int(os.environ.get("PORT", 8000))
-    ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
-    debug = ENVIRONMENT == "development"
-    
-    # Start the bot in a separate thread
-    bot_thread = threading.Thread(target=run_bot, name="BotThread")
-    bot_thread.daemon = True
-    bot_thread.start()
-    
-    # Wait a moment for bot initialization
-    time.sleep(2)
-    
-    logger.info(f"Starting Flask app on port {PORT}")
-    logger.info(f"Bot initialized: {bot_initialized}")
-    
-    try:
-        # Start the Flask app (this runs in the main thread)
-        app.run(host='0.0.0.0', port=PORT, debug=debug, use_reloader=False)
-    except KeyboardInterrupt:
-        logger.info("Shutting down...")
-    except Exception as e:
-        logger.error(f"Error starting Flask app: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-    finally:
-        # Wait for bot thread to finish if it's still running
-        if bot_thread and bot_thread.is_alive():
-            bot_thread.join(timeout=10)
-        logger.info("Application stopped")
+        logger.info("Bot stopped")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
