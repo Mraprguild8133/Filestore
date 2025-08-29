@@ -2,6 +2,7 @@
 pyrofork>=2.3.61
 TgCrypto>=1.2.5
 pyromod>=1.5
+Pyrogram>=2.0
 
 # --- Task Scheduling ---
 APScheduler>=3.10.4
