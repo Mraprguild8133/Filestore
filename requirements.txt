@@ -11,6 +11,7 @@ dnspython
 # --- For-Web-Response ------- #
 aiohttp
 python-dotenv
+flask
 # --- For-Web-Response ------- #
 pytz
 requests
