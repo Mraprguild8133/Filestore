@@ -1,22 +1,24 @@
-#https://codeload.github.com/KurimuzonAkuma/pyrogram/zip/refs/heads/dev
+# --- Pyrogram Fork & Dependencies ---
 pyrofork==2.3.61
-TgCrypto
-pyrogram
+TgCrypto==1.2.5
 pyromod==1.5
-schedule
-APscheduler
-# --- For-Database ------------ #
-pymongo
-motor
-dnspython
-# --- For-Web-Response ------- #
-aiohttp
-python-dotenv
-flask
-uvicorn
-# --- For-Web-Response ------- #
-pytz
-requests
-bs4
-aiofiles
-asyncio
+
+# --- Task Scheduling ---
+APScheduler==3.10.4
+
+# --- Database ---
+pymongo==4.8.0
+motor==3.6.0
+dnspython==2.7.0
+
+# --- Web / API ---
+aiohttp==3.10.10
+python-dotenv==1.0.1
+flask==3.0.3
+uvicorn==0.34.0
+
+# --- Utilities ---
+pytz==2025.1
+requests==2.32.3
+beautifulsoup4==4.12.3
+aiofiles==24.1.0
