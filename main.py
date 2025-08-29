@@ -4,7 +4,7 @@
 Web server entry point for Telegram FileStore Bot
 Runs on port 8000 and supports webhook handling
 """
-
+import Pyrogram
 import asyncio
 import logging
 import os
