@@ -71,14 +71,6 @@ class Config:
         "gg.gg": {"api_url": "http://gg.gg/create", "requires_key": False},
         "tiny.cc": {"api_url": "https://tiny.cc/", "requires_key": True}
     }
- 
-  # For webhook mode
-  export USE_WEBHOOK="true"
-  export WEBHOOK_URL="https://yourdomain.com/webhook"
-  export PORT="8000"
-
-# Optional security
-export WEBHOOK_SECRET="your_secret_token_here"
 
     # Validation
     @classmethod
