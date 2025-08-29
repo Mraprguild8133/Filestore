@@ -7,7 +7,7 @@ Main entry point for the Telegram FileStore Bot
 import asyncio
 import logging
 from bot import Bot
-from web_server import run_webserver
+from webserver import run_webserver
 from threading import Thread
 
 # Configure logging
