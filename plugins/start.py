@@ -227,10 +227,10 @@ async def refresh_force_sub(client: Client, callback_query: CallbackQuery):
     
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📢 Updates", url="https://t.me/codeflix_bots"),
-            InlineKeyboardButton("💬 Support", url="https://t.me/codeflix_bots")
+            InlineKeyboardButton("📢 Updates", url="https://t.me/mraprguildbot"),
+            InlineKeyboardButton("💬 Support", url="https://t.me/mraprguildbot")
         ],
-        [InlineKeyboardButton("👨‍💻 Developer", url="https://t.me/codeflix_bots")]
+        [InlineKeyboardButton("👨‍💻 Developer", url="https://t.me/mraprguildbot")]
     ])
     
     await callback_query.message.reply_text(start_msg, reply_markup=keyboard)
